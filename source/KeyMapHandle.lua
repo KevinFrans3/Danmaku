@@ -15,6 +15,9 @@ end
 
 function keyUpdate(dt)
 	KeyMap:update(dt)
+	if(KeyMap.isPushed("up")) then
+		print("pressed up")
+	end
 end
 
 function keyDown(string)

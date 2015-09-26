@@ -7,6 +7,7 @@ game = require "source.game"
 graphics = require "source.graphics"
 playerSource = require "source.player"
 collision = require "source.collision"
+basicstage = require "source.basicstage"
 
 
 
@@ -14,12 +15,13 @@ function love.load()
 	collisionInit()
 	gameInit()
 	keyInit()
+	basicInit()
 end
 
 function love.update(dt)
-	keyUpdate(dt)
 	collider:update(dt)
 	gameUpdate(dt)
+	keyUpdate(dt)
 end
 
 function love.draw()
