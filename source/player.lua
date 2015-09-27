@@ -7,11 +7,12 @@ function playerInit()
 		jump = -700,
 		jumpsleft = 2,
 		focusfactor = 3,
+		canmove = true,
 		focus = false,
 		image = love.graphics.newImage("images/hamster.png"), -- let's just re-use this sprite.
-		collision = collider:addRectangle(0,0,32,32),
-		bottomCollision = collider:addRectangle(0,32,32,16),
-		hitbox = collider:addRectangle(0,0,8,8),
+		collision = collider:addRectangle(0,0,64,64),
+		bottomCollision = collider:addRectangle(0,64,64,32),
+		hitbox = collider:addRectangle(0,0,16,16),
 		onGround = false
 	}
 	player.collision.parent = player
@@ -36,6 +37,7 @@ function playerMoveRight(player,dt)
 end
 
 function playerJump(player)
+	print(player.jumpsleft)
 	if player.jumpsleft > 0 then
 		player.jumpsleft = player.jumpsleft - 1
 		player.yVel = player.jump
@@ -43,6 +45,10 @@ function playerJump(player)
 			player.yVel = player.jump
 		end
 	end
+end
+
+function playerCast(player,movenumber)
+	militaryCast(player,movenumber)
 end
 
 function playerUpdate(player,dt)
@@ -67,6 +73,6 @@ function playerUpdate(player,dt)
 	end
 
 	player.collision:moveTo(player.x,player.y)
-	player.bottomCollision:moveTo(player.x,player.y+8)
+	player.bottomCollision:moveTo(player.x,player.y+16)
 	player.hitbox:moveTo(player.x,player.y)
 end

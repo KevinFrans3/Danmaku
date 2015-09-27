@@ -12,9 +12,7 @@ function on_collide(dt, shape_a, shape_b, mtv_x, mtv_y)
 	end
 
 	if playerbottomcollision ~= nil then
-		print("touchground before")
 		if blockTopCollision ~= nil then
-			print("touchground")
 			playerbottomcollision.parent.onGround = true
 		end
 	end
