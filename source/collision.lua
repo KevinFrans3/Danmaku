@@ -1,29 +1,31 @@
 function on_collide(dt, shape_a, shape_b, mtv_x, mtv_y)
 
-	local playercollision = collisionIsShape(shape_a,shape_b,testPlayer.collision)
-	local playerbottomcollision = collisionIsShape(shape_a,shape_b,testPlayer.bottomCollision)
-	local blockCollision = collisionIsShape(shape_a,shape_b,block.collision)
+	local playercollision = collisionIsShapeTable(shape_a,shape_b,players,"collision")
+	local playerbottomcollision = collisionIsShapeTable(shape_a,shape_b,players,"bottomCollision")
+	local blockCollision = collisionIsShapeTable(shape_a,shape_b,blocks,"collision")
+	local blockTopCollision = collisionIsShapeTable(shape_a,shape_b,blocks,"topcollision")
 
 	if playercollision ~= nil and blockCollision ~= nil then
 		-- print(mtv_x)
-		testPlayer.x = testPlayer.x + mtv_x
-		testPlayer.y = testPlayer.y + mtv_y
+		playercollision.parent.x = playercollision.parent.x + mtv_x
+		playercollision.parent.y = playercollision.parent.y + mtv_y
 	end
 
 	if playerbottomcollision ~= nil then
 		print("touchground before")
-		if blockCollision ~= nil then
+		if blockTopCollision ~= nil then
 			print("touchground")
-			testPlayer.onGround = true
+			playerbottomcollision.parent.onGround = true
 		end
 	end
 end
 
 function collision_stop(dt, shape_a, shape_b)
 
-	local playercollision = collisionIsShape(shape_a,shape_b,testPlayer.collision)
-	local playerbottomcollision = collisionIsShape(shape_a,shape_b,testPlayer.bottomCollision)
-	local blockCollision = collisionIsShape(shape_a,shape_b,block.collision)
+	local playercollision = collisionIsShapeTable(shape_a,shape_b,players,"collision")
+	local playerbottomcollision = collisionIsShapeTable(shape_a,shape_b,players,"bottomCollision")
+	local blockCollision = collisionIsShapeTable(shape_a,shape_b,blocks,"collision")
+	local blockTopCollision = collisionIsShapeTable(shape_a,shape_b,blocks,"topcollision")
 
 	if playercollision ~= nil and blockCollision ~= nil then
 		-- print(mtv_x)
@@ -31,8 +33,8 @@ function collision_stop(dt, shape_a, shape_b)
 		-- testPlayer.y = testPlayer.y + mtv_y
 	end
 
-	if playerbottomcollision ~= nil and blockCollision ~= nil then
-		testPlayer.onGround = false
+	if playerbottomcollision ~= nil and blockTopCollision ~= nil then
+		playerbottomcollision.parent.onGround = false
 	end
 end
 
@@ -47,6 +49,20 @@ function collisionIsShape(shape_a,shape_b,wanted)
 	end
 	if shape_b == wanted then
 		isWanted = shape_b
+	end
+	return isWanted
+end
+
+-- WANTED IS AN ARRAY
+function collisionIsShapeTable(shape_a,shape_b,wanted,key)
+	local isWanted
+	for i = 1, #wanted do
+		if shape_a == wanted[i][key] then
+			isWanted = shape_a
+		end
+		if shape_b == wanted[i][key] then
+			isWanted = shape_b
+		end
 	end
 	return isWanted
 end
