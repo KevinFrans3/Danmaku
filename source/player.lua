@@ -21,34 +21,42 @@ function playerInit()
 end
 
 function playerMoveLeft(player,dt)
-	if not player.focus then
-		player.x = player.x - player.speed*dt
-	else
-		player.x = player.x - (player.speed*dt)/player.focusfactor
+	if player.canmove then
+		if not player.focus then
+			player.x = player.x - player.speed*dt
+		else
+			player.x = player.x - (player.speed*dt)/player.focusfactor
+		end
 	end
 end
 
 function playerMoveRight(player,dt)
-	if not player.focus then
-		player.x = player.x + player.speed*dt
-	else
-		player.x = player.x + (player.speed*dt)/player.focusfactor
+	if player.canmove then
+		if not player.focus then
+			player.x = player.x + player.speed*dt
+		else
+			player.x = player.x + (player.speed*dt)/player.focusfactor
+		end
 	end
 end
 
 function playerJump(player)
-	print(player.jumpsleft)
-	if player.jumpsleft > 0 then
-		player.jumpsleft = player.jumpsleft - 1
-		player.yVel = player.jump
-		if player.focus then
+	if player.canmove then
+		print(player.jumpsleft)
+		if player.jumpsleft > 0 then
+			player.jumpsleft = player.jumpsleft - 1
 			player.yVel = player.jump
+			if player.focus then
+				player.yVel = player.jump
+			end
 		end
 	end
 end
 
 function playerCast(player,movenumber)
-	militaryCast(player,movenumber)
+	if player.canmove then
+		militaryCast(player,movenumber)
+	end
 end
 
 function playerUpdate(player,dt)

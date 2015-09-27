@@ -1,5 +1,6 @@
 HC = require "HardonCollider"
 KeyMap = require "modules.keymap"
+cron = require "cron"
 
 keymapSource = require "source.KeyMapHandle"
 globalvars = require "source.globalvars"
@@ -29,6 +30,9 @@ function love.update(dt)
 	gameUpdate(dt)
 	keyUpdate(dt)
 	cameraUpdate(dt)
+	for i = 1, #cronjobs do
+		cronjobs[i]:update(dt)
+	end
 end
 
 function love.draw()

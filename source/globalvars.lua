@@ -6,6 +6,7 @@ players = {};
 bullets = {};
 background = {};
 camera = {};
+cronjobs = {};
 
 
 --DECLARED IN OTHER PLACES:
