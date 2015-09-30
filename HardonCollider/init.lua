@@ -24,41 +24,45 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ]]--
 
-local _NAME = (...)
-local Class       = require(_NAME .. '.class')
+local _NAME, common_local = ..., common
+if not (type(common) == 'table' and common.class and common.instance) then
+	assert(common_class ~= false, 'No class commons specification available.')
+	require(_NAME .. '.class')
+end
 local Shapes      = require(_NAME .. '.shapes')
 local Spatialhash = require(_NAME .. '.spatialhash')
-local vector      = require(_NAME .. '.vector')
 
-local PolygonShape = Shapes.PolygonShape
-local CircleShape  = Shapes.CircleShape
-local PointShape   = Shapes.PointShape
+-- reset global table `common' (required by class commons)
+if common_local ~= common then
+	common_local, common = common, common_local
+end
+
+local newPolygonShape = Shapes.newPolygonShape
+local newCircleShape  = Shapes.newCircleShape
+local newPointShape   = Shapes.newPointShape
 
 local function __NULL__() end
 
-local HC = Class{name = "HardonCollider", function(self, cell_size, callback_collide, callback_stop)
+local HC = {}
+function HC:init(cell_size, callback_collide, callback_stop)
 	self._active_shapes  = {}
 	self._passive_shapes = {}
 	self._ghost_shapes   = {}
-	self._current_shape_id = 0
-	self._shape_ids      = setmetatable({}, {__mode = "k"}) -- reverse lookup
 	self.groups          = {}
-	self._colliding_last_frame = {}
+	self._colliding_only_last_frame = {}
 
 	self.on_collide = callback_collide or __NULL__
 	self.on_stop    = callback_stop    or __NULL__
-	self._hash      = Spatialhash(cell_size)
-end}
+	self._hash      = common_local.instance(Spatialhash, cell_size)
+end
 
 function HC:clear()
 	self._active_shapes  = {}
 	self._passive_shapes = {}
 	self._ghost_shapes   = {}
-	self._current_shape_id = 0
-	self._shape_ids      = setmetatable({}, {__mode = "k"}) -- reverse lookup
 	self.groups          = {}
-	self._colliding_last_frame = {}
-	self._hash           = Spatialhash(self.hash.cell_size)
+	self._colliding_only_last_frame = {}
+	self._hash           = common_local.instance(Spatialhash, self._hash.cell_size)
 	return self
 end
 
@@ -83,113 +87,66 @@ function HC:setCallbacks(collide, stop)
 	return self
 end
 
-local function new_shape(self, shape, ul,lr)
-	self._current_shape_id = self._current_shape_id + 1
-	self._active_shapes[self._current_shape_id] = shape
-	self._shape_ids[shape] = self._current_shape_id
-	self._hash:insert(shape, ul,lr)
+function HC:addShape(shape)
+	assert(shape.bbox and shape.collidesWith,
+		"Cannot add custom shape: Incompatible shape.")
+
+	self._active_shapes[shape] = shape
+	self._hash:insert(shape, shape:bbox())
 	shape._groups = {}
-	return shape
-end
 
--- create polygon shape and add it to internal structures
-function HC:addPolygon(...)
-	local shape = PolygonShape(...)
 	local hash = self._hash
-
-	-- replace shape member function with a function that updates
-	-- the hash
-	local function hash_aware_member(oldfunc)
-		return function(self, ...)
-			local x1,y1, x2,y2 = self._polygon:getBBox()
-			oldfunc(self, ...)
-			local x3,y3, x4,y4 = self._polygon:getBBox()
-			hash:update(shape, vector(x1,y1), vector(x2,y2), vector(x3,y3), vector(x4,y4))
+	local move, rotate,scale = shape.move, shape.rotate, shape.scale
+	for _, func in ipairs{'move', 'rotate', 'scale'} do
+		local old_func = shape[func]
+		shape[func] = function(self, ...)
+			local x1,y1,x2,y2 = self:bbox()
+			old_func(self, ...)
+			local x3,y3,x4,y4 = self:bbox()
+			hash:update(self, x1,y1, x2,y2, x3,y3, x4,y4)
 		end
 	end
 
-	shape.move = hash_aware_member(shape.move)
-	shape.rotate = hash_aware_member(shape.rotate)
-
-	function shape:_getNeighbors()
-		local x1,y1, x2,y2 = self._polygon:getBBox()
-		return hash:getNeighbors(self, vector(x1,y1), vector(x2,y2))
-	end
-
 	function shape:_removeFromHash()
-		local x1,y1, x2,y2 = self._polygon:getBBox()
-		hash:remove(shape) --, vector(x1,y1), vector(x2,y2))
+		shape.move, shape.rotate, shape.scale = move, rotate, scale
+		return hash:remove(shape, self:bbox())
 	end
 
-	local x1,y1, x2,y2 = shape._polygon:getBBox()
-	return new_shape(self, shape, vector(x1,y1), vector(x2,y2))
+	function shape:neighbors()
+		local neighbors = hash:inRange(self:bbox())
+		rawset(neighbors, self, nil)
+		return neighbors
+	end
+
+	function shape:inGroup(group)
+		return self._groups[group]
+	end
+
+	return shape
+end
+
+function HC:activeShapes()
+	return pairs(self._active_shapes)
+end
+
+function HC:shapesInRange(x1,y1, x2,y2)
+	return self._hash:inRange(x1,y1, x2,y2)
+end
+
+function HC:addPolygon(...)
+	return self:addShape(newPolygonShape(...))
 end
 
 function HC:addRectangle(x,y,w,h)
 	return self:addPolygon(x,y, x+w,y, x+w,y+h, x,y+h)
 end
 
--- create new polygon approximation of a circle
 function HC:addCircle(cx, cy, radius)
-	local shape = CircleShape(cx,cy, radius)
-	local hash = self._hash
-
-	local function hash_aware_member(oldfunc)
-		return function(self, ...)
-			local r = vector(self._radius, self._radius)
-			local c1 = self._center
-			oldfunc(self, ...)
-			local c2 = self._center
-			hash:update(self, c1-r, c1+r, c2-r, c2+r)
-		end
-	end
-
-	shape.move = hash_aware_member(shape.move)
-	shape.rotate = hash_aware_member(shape.rotate)
-
-	function shape:_getNeighbors()
-		local c,r = self._center, vector(self._radius, self._radius)
-		return hash:getNeighbors(self, c-r, c+r)
-	end
-
-	function shape:_removeFromHash()
-		local c,r = self._center, vector(self._radius, self._radius)
-		hash:remove(self, c-r, c+r)
-	end
-
-	local c,r = shape._center, vector(radius,radius)
-	return new_shape(self, shape, c-r, c+r)
+	return self:addShape(newCircleShape(cx,cy, radius))
 end
 
 function HC:addPoint(x,y)
-	local shape = PointShape(x,y)
-	local hash = self._hash
-
-	local function hash_aware_member(oldfunc)
-		return function(self, ...)
-			rawset(hash:cell(self._pos), self, nil)
-			oldfunc(self, ...)
-			rawset(hash:cell(self._pos), self, self)
-		end
-	end
-
-	shape.move = hash_aware_member(shape.move)
-	shape.rotate = hash_aware_member(shape.rotate)
-
-	function shape:_getNeighbors()
-		local set = {}
-		for _,other in pairs(hash:cell(self._pos)) do
-			rawset(set, other, other)
-		end
-		rawset(set, self, nil)
-		return set
-	end
-
-	function shape:_removeFromHash()
-		hash:remove(self, self._pos, self._pos)
-	end
-
-	return new_shape(self, shape, shape._pos, shape._pos)
+	return self:addShape(newPointShape(x,y))
 end
 
 function HC:share_group(shape, other)
@@ -199,115 +156,133 @@ function HC:share_group(shape, other)
 	return false
 end
 
-
--- get unique indentifier for an unordered pair of shapes, i.e.:
--- collision_id(s,t) = collision_id(t,s)
-local function collision_id(self,s,t)
-	local i,k = self._shape_ids[s], self._shape_ids[t]
-	if i < k then i,k = k,i end
-	return string.format("%d,%d", i,k)
-end
-
 -- check for collisions
 function HC:update(dt)
-	-- collect colliding shapes
+	-- cache for tested/colliding shapes
 	local tested, colliding = {}, {}
-	for _,shape in pairs(self._active_shapes) do
-		local neighbors = shape:_getNeighbors()
-		for _,other in pairs(neighbors) do
-			local id = collision_id(self, shape,other)
-			if not tested[id] then
-				if not (self._ghost_shapes[other] or self:share_group(shape, other)) then
-					local collide, sep = shape:collidesWith(other)
-					if collide then
-						colliding[id] = {shape, other, sep.x, sep.y}
+	local function may_skip_test(shape, other)
+		return (shape == other)
+		    or (tested[other] and tested[other][shape])
+		    or self._ghost_shapes[other]
+		    or self:share_group(shape, other)
+	end
+
+	-- collect active shapes. necessary, because a callback might add shapes to
+	-- _active_shapes, which will lead to undefined behavior (=random crashes) in
+	-- next()
+	local active = {}
+	for shape in self:activeShapes() do
+		active[shape] = shape
+	end
+
+	local only_last_frame = self._colliding_only_last_frame
+	for shape in pairs(active) do
+		tested[shape] = {}
+		for other in self._hash:rangeIter(shape:bbox()) do
+			if not self._active_shapes[shape] then
+				-- break out of this loop is shape was removed in a callback
+				break
+			end
+
+			if not may_skip_test(shape, other) then
+				local collide, sx,sy = shape:collidesWith(other)
+				if collide then
+					if not colliding[shape] then colliding[shape] = {} end
+					colliding[shape][other] = {sx, sy}
+
+					-- flag shape colliding this frame and call collision callback
+					if only_last_frame[shape] then
+						only_last_frame[shape][other] = nil
 					end
-					tested[id] = true
+					self.on_collide(dt, shape, other, sx, sy)
 				end
+				tested[shape][other] = true
 			end
 		end
 	end
 
-	-- call colliding callbacks on colliding shapes
-	for id,info in pairs(colliding) do
-		self._colliding_last_frame[id] = nil
-		self.on_collide( dt, unpack(info) )
-	end
-
 	-- call stop callback on shapes that do not collide anymore
-	for _,info in pairs(self._colliding_last_frame) do
-		self.on_stop( dt, unpack(info) )
+	for a,reg in pairs(only_last_frame) do
+		for b, info in pairs(reg) do
+			self.on_stop(dt, a, b, info[1], info[2])
+		end
 	end
 
-	self._colliding_last_frame = colliding
+	self._colliding_only_last_frame = colliding
+end
+
+-- get list of shapes at point (x,y)
+function HC:shapesAt(x, y)
+	local shapes = {}
+	for s in pairs(self._hash:cellAt(x,y)) do
+		if s:contains(x,y) then
+			shapes[#shapes+1] = s
+		end
+	end
+	return shapes
 end
 
 -- remove shape from internal tables and the hash
-function HC:remove(shape)
-	local id = self._shape_ids[shape]
-	if id then
-		self._active_shapes[id] = nil
-		self._passive_shapes[id] = nil
+function HC:remove(shape, ...)
+	if not shape then return end
+	self._active_shapes[shape]  = nil
+	self._passive_shapes[shape] = nil
+	self._ghost_shapes[shape]   = nil
+	for name, group in pairs(shape._groups) do
+		group[shape] = nil
 	end
-	self._ghost_shapes[shape] = nil
-	self._shape_ids[shape] = nil
 	shape:_removeFromHash()
 
-	return shape
+	return self:remove(...)
 end
 
 -- group support
 function HC:addToGroup(group, shape, ...)
 	if not shape then return end
-	assert(self._shape_ids[shape], "Shape not registered!")
-
+	assert(self._active_shapes[shape] or self._passive_shapes[shape],
+		"Shape is not registered with HC")
 	if not self.groups[group] then self.groups[group] = {} end
 	self.groups[group][shape] = true
-	shape._groups[group] = self.groups[group]
+	shape._groups[group]      = self.groups[group]
 	return self:addToGroup(group, ...)
 end
 
 function HC:removeFromGroup(group, shape, ...)
 	if not shape or not self.groups[group] then return end
-	assert(self._shape_ids[shape], "Shape not registered!")
-
+	assert(self._active_shapes[shape] or self._passive_shapes[shape],
+		"Shape is not registered with HC")
 	self.groups[group][shape] = nil
-	shape._groups[group] = nil
+	shape._groups[group]      = nil
 	return self:removeFromGroup(group, ...)
 end
 
 function HC:setPassive(shape, ...)
 	if not shape then return end
-	assert(self._shape_ids[shape], "Shape not registered!")
-
-	local id = self._shape_ids[shape]
-	if not id or self._ghost_shapes[shape] then return end
-
-	self._active_shapes[id] = nil
-	self._passive_shapes[id] = shape
-
+	if not self._ghost_shapes[shape] then
+		assert(self._active_shapes[shape], "Shape is not active")
+		self._active_shapes[shape] = nil
+		self._passive_shapes[shape] = shape
+	end
 	return self:setPassive(...)
 end
 
 function HC:setActive(shape, ...)
 	if not shape then return end
-	assert(self._shape_ids[shape], "Shape not registered!")
-
-	local id = self._shape_ids[shape]
-	if not id or self._ghost_shapes[shape] then return end
-
-	self._active_shapes[id] = shape
-	self._passive_shapes[id] = nil
+	if not self._ghost_shapes[shape] then
+		assert(self._passive_shapes[shape], "Shape is not passive")
+		self._active_shapes[shape]  = shape
+		self._passive_shapes[shape] = nil
+	end
 
 	return self:setActive(...)
 end
 
 function HC:setGhost(shape, ...)
 	if not shape then return end
-	local id = self._shape_ids[shape]
-	assert(id, "Shape not registered!")
+	assert(self._active_shapes[shape] or self._passive_shapes[shape],
+		"Shape is not registered with HC")
 
-	self._active_shapes[id] = nil
+	self._active_shapes[shape] = nil
 	-- dont remove from passive shapes, see below
 	self._ghost_shapes[shape] = shape
 	return self:setGhost(...)
@@ -315,16 +290,22 @@ end
 
 function HC:setSolid(shape, ...)
 	if not shape then return end
-	local id = self._shape_ids[shape]
-	assert(id, "Shape not registered!")
+	assert(self._ghost_shapes[shape], "Shape not a ghost")
 
 	-- re-register shape. passive shapes were not unregistered above, so if a shape
 	-- is not passive, it must be registered as active again.
-	if not self._passive_shapes[id] then
-		self._active_shapes[id] = shape
+	if not self._passive_shapes[shape] then
+		self._active_shapes[shape] = shape
 	end
 	self._ghost_shapes[shape] = nil
 	return self:setSolid(...)
 end
 
-return setmetatable({new = HC}, {__call = function(_,...) return HC(...) end})
+-- the module
+HC = common_local.class("HardonCollider", HC)
+local function new(...)
+	return common_local.instance(HC, ...)
+end
+
+return setmetatable({HardonCollider = HC, new = new},
+	{__call = function(_,...) return new(...) end})

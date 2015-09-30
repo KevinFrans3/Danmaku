@@ -4,16 +4,43 @@ function on_collide(dt, shape_a, shape_b, mtv_x, mtv_y)
 	local playerbottomcollision = collisionIsShapeTable(shape_a,shape_b,players,"bottomCollision")
 	local blockCollision = collisionIsShapeTable(shape_a,shape_b,blocks,"collision")
 	local blockTopCollision = collisionIsShapeTable(shape_a,shape_b,blocks,"topcollision")
+	local bulletCollision = collisionIsShapeTable(shape_a,shape_b,bullets,"hitbox")
 
 	if playercollision ~= nil and blockCollision ~= nil then
 		-- print(mtv_x)
 		playercollision.parent.x = playercollision.parent.x + mtv_x
-		playercollision.parent.y = playercollision.parent.y + mtv_y
+		if mtv_y < 0 then
+			playercollision.parent.y = playercollision.parent.y + mtv_y
+		end
 	end
 
 	if playerbottomcollision ~= nil then
 		if blockTopCollision ~= nil then
 			playerbottomcollision.parent.onGround = true
+		end
+	end
+
+	if bulletCollision ~= nil and blockCollision ~= nil then
+		for i = 1, #bullets do
+			if bullets[i].hitbox == bulletCollision then
+				local bulletx = bullets[i].x
+				local bullety = bullets[i].y
+				local bulletid = bullets[i].id
+				collider:remove(bulletCollision)
+				table.remove(bullets,i)
+				if bulletid == "nuke" then
+					for x = 1, 32 do
+						local bullet = bulletInit()
+						bullet.x = bulletx
+						bullet.y = bullety
+						bulletSetSpeed(bullet,100 + love.math.random()*100)
+						bullet.acceleration = love.math.random()*100
+						bulletSetAngle(bullet,x * (360/32))
+						table.insert(bullets,bullet)
+					end
+				end
+				break
+			end
 		end
 	end
 end
@@ -32,6 +59,7 @@ function collision_stop(dt, shape_a, shape_b)
 	end
 
 	if playerbottomcollision ~= nil and blockTopCollision ~= nil then
+		print("leaveground")
 		playerbottomcollision.parent.onGround = false
 	end
 end

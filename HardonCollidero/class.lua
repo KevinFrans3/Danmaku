@@ -66,6 +66,22 @@ local function new(args)
 	class.__is_a = {[class] = true}
 	class.is_a = function(self, other) return not not self.__is_a[other] end
 
+	-- intercept assignment in global environment to infer the class name
+	if not (type(args) == "table" and args.name) then
+		local env, env_meta, interceptor = getfenv(0), getmetatable(getfenv(0)), {}
+		function interceptor:__newindex(key, value)
+			if value == class then
+				local name = tostring(key)
+				getmetatable(class).__tostring = function() return name end
+			end
+			-- restore old metatable and insert value
+			setmetatable(env, env_meta)
+			if env.global then env.global(key) end -- handle 'strict' module
+			env[key] = value
+		end
+		setmetatable(env, interceptor)
+	end
+
 	-- inherit superclasses (see above)
 	inherit(class, unpack(super))
 
@@ -83,16 +99,14 @@ local function new(args)
 end
 
 -- interface for cross class-system compatibility (see https://github.com/bartbes/Class-Commons).
-if common_class ~= false and not common then
-	common = {}
+if class_commons ~= false then
+	common = common or {}
 	function common.class(name, prototype, parent)
 		local init = prototype.init or (parent or {}).init
 		return new{name = name, inherits = {prototype, parent}, init}
 	end
-	function common.instance(class, ...)
-		return class(...)
-	end
 end
+
 
 -- the module
 return setmetatable({new = new, inherit = inherit},

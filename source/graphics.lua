@@ -1,5 +1,7 @@
 function graphicsDraw()
 
+
+
 	love.graphics.setColor(255,255,255)
 	love.graphics.translate(-camera.x/6,-camera.y/6)
 	love.graphics.draw(background.back,-500,-100,0,3,3)
@@ -10,6 +12,26 @@ function graphicsDraw()
 
 	love.graphics.origin()
 	love.graphics.translate(-camera.x,-camera.y)
+
+	-- local shapecount = 0
+	-- for shape in collider:activeShapes() do
+	--     shapecount = shapecount + 1
+	-- end
+
+	love.graphics.setColor(0,0,0)
+	local tempground = 0
+	if players[1].onGround then
+		tempground = 1
+	end
+
+	local tempground2 = 0
+	if players[2].onGround then
+		tempground2 = 1
+	end
+	love.graphics.print(#cronjobs .. "   " .. tempground2 .. "   " .. players[1].xVel .. "   " .. players[1].yVel .. "   " .. #collider._active_shapes, 100,300)
+
+
+
 
 
 

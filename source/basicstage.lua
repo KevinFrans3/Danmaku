@@ -1,7 +1,7 @@
 function basicInit()
 	local block = {
 		collision = collider:addRectangle(100,500,900,50),
-		topcollision = collider:addRectangle(100,500,900,3)
+		topcollision = collider:addRectangle(100,500,900,8)
 	}
 	blocks[1] = block
 
